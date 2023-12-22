@@ -130,19 +130,19 @@ sitemap/fast:
 .PHONY : sitemap/fast
 
 # target to build an object file
-sitemap.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sitemap.dir/build.make CMakeFiles/sitemap.dir/sitemap.o
-.PHONY : sitemap.o
+main.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sitemap.dir/build.make CMakeFiles/sitemap.dir/main.o
+.PHONY : main.o
 
 # target to preprocess a source file
-sitemap.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sitemap.dir/build.make CMakeFiles/sitemap.dir/sitemap.i
-.PHONY : sitemap.i
+main.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sitemap.dir/build.make CMakeFiles/sitemap.dir/main.i
+.PHONY : main.i
 
 # target to generate assembly for a file
-sitemap.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sitemap.dir/build.make CMakeFiles/sitemap.dir/sitemap.s
-.PHONY : sitemap.s
+main.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sitemap.dir/build.make CMakeFiles/sitemap.dir/main.s
+.PHONY : main.s
 
 # Help Target
 help:
@@ -153,9 +153,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... sitemap"
-	@echo "... sitemap.o"
-	@echo "... sitemap.i"
-	@echo "... sitemap.s"
+	@echo "... main.o"
+	@echo "... main.i"
+	@echo "... main.s"
 .PHONY : help
 
 

@@ -33,7 +33,7 @@ public:
             urlQueue.push(url);
         }
 
-        const int numThreads = 10;
+        const int numThreads = 100;
         std::vector<std::thread> threads;
 
         // thread-safe access to urlQueue
@@ -235,6 +235,9 @@ private:
 }
 
  void insertSitemapToCassandra(CassSession* session, const std::string& siteName, const std::string& siteUrl, const std::vector<std::string>& sitemapUrls) {
+    if (sitemapUrls.empty()) {
+        return;
+    }
     // Create and execute a query to insert data
     std::string query = "INSERT INTO sitemaps_keyspace.sitemaps_table (site_name, site_url, sitemap_urls) VALUES (?, ?, ?)";
     CassStatement* statement = cass_statement_new(query.c_str(), 3);

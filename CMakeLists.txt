@@ -1,7 +1,7 @@
 include_directories(/usr/local/include)
 
 # Your target definition
-add_executable(sitemap sitemap.cpp)
+add_executable(sitemap main.cpp)
 
 find_library(CASSANDRA_LIB cassandra)
 
