@@ -34,8 +34,6 @@ public:
         std::string createKeyspaceQuery = "CREATE KEYSPACE IF NOT EXISTS sitemaps_keyspace WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}";
         executeCqlQuery(session, createKeyspaceQuery);
 
-        // Create sitemaps_table
-        // delete table first if exists
         // std::string dropTableQuery = "DROP TABLE IF EXISTS sitemaps_keyspace.sitemaps_table";
         // executeCqlQuery(session, dropTableQuery);
 
