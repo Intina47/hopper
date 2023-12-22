@@ -9,62 +9,35 @@
 #include <curl/curl.h>
 #include <gumbo.h>
 #include <cassandra.h>
-// #include <cassandra/cassandra.h>
+#include "db.h"
+
 class SitemapGenerator {
 public:
     SitemapGenerator(const std::string& url, const std::string& filename)
         : url(url), filename(filename) {
             // connect to cassandra
-            std::cout << "Connecting to cassandra" << std::endl;
-            cluster = cass_cluster_new();
-            session = cass_session_new();
-            cass_cluster_set_contact_points(cluster, "127.0.0.1");
-            cass_cluster_set_port(cluster, 9042);
-            connect_future = cass_session_connect(session, cluster);
-
-            CassError rc = cass_future_error_code(connect_future);
-            if (rc != CASS_OK) {
-                std::cout << "Error connecting to cassandra" << std::endl;
-            } else {
-                std::cout << "Connected to cassandra" << std::endl;
-                createTables(session);
-            }
+            db.connect();
+            session = db.getSession();
         }
 
     ~SitemapGenerator() {
-        // re
-        cass_future_free(connect_future);
-        cass_session_free(session);
-        cass_cluster_free(cluster);
+        db.close();
     }
 
     void generate() {
         std::cout << "Generating sitemap for " << url << std::endl;
         generateSitemap();
-    }
-
-    void createTables(CassSession* session) {
-        // Create keyspace if not exists
-        std::string createKeyspaceQuery = "CREATE KEYSPACE IF NOT EXISTS sitemaps_keyspace WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}";
-        executeCqlQuery(session, createKeyspaceQuery);
-
-        // Create sitemaps_table
-        std::string createTableQuery = "CREATE TABLE IF NOT EXISTS sitemaps_keyspace.sitemaps_table ("
-                                       "site_name text,"
-                                       "site_url text,"
-                                       "sitemap_urls set<text>,"
-                                       "PRIMARY KEY (site_name, site_url)"
-                                       ")";
-        executeCqlQuery(session, createTableQuery);
+        std::cout << "Generating sitemap from DB" << std::endl;
+        getSitemapFromCassandra(session, siteName, url);
+        std::cout << "Sitemap generated successfully From DB" << std::endl;
     }
 
 private:
     std::string url;
     std::string filename;
-    CassCluster* cluster;
     CassSession* session;
-    CassFuture* connect_future;
     std::string siteName;
+    DB db;
 
     static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* s) {
         size_t newLength = size*nmemb;
@@ -89,6 +62,11 @@ private:
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
             res = curl_easy_perform(curl);
+            if(res != CURLE_OK) {
+                std::cout << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+            } else {
+                std::cout << "Webpage fetched successfully" << std::endl;
+            }
             curl_easy_cleanup(curl);
         }
         curl_global_cleanup();
@@ -144,19 +122,6 @@ private:
 
     }
 
-    void executeCqlQuery(CassSession* session, const std::string& query) {
-        CassStatement* statement = cass_statement_new(query.c_str(), 0);
-        CassFuture* result_future = cass_session_execute(session, statement);
-
-        if (cass_future_error_code(result_future) != CASS_OK) {
-            std::cout << "Error executing query" << std::endl;
-        } else {
-            std::cout << "Query executed successfully" << std::endl;
-        }
-
-        cass_statement_free(statement);
-    }
-
     void saveSitemapToCassandra(CassSession* session, const std::string& siteName, const std::string& siteUrl, const std::vector<std::string>& sitemapUrls) {
     // Create and execute a query to insert data
     std::string query = "INSERT INTO sitemaps_keyspace.sitemaps_table (site_name, site_url, sitemap_urls) VALUES (?, ?, ?)";
@@ -173,16 +138,61 @@ private:
     cass_statement_bind_collection(statement, 2, sitemapCollection);
 
     CassFuture* result_future = cass_session_execute(session, statement);
+    // log error into a variable
+
+    CassError rc = cass_future_error_code(result_future);
 
     if (cass_future_error_code(result_future) != CASS_OK) {
-        // Handle insert error
-        std::cout << "Error inserting data" << std::endl;
+        std::cout << "Error inserting data: " << rc << std::endl;
     } else {
         std::cout << "Data inserted successfully" << std::endl;
     }
 
     cass_collection_free(sitemapCollection);
     cass_statement_free(statement);
+}
+
+// get data from cassandra and save it to an xml file
+void getSitemapFromCassandra(CassSession* session, const std::string& siteName, const std::string& siteUrl) {
+    std::string query = "SELECT sitemap_urls FROM sitemaps_keyspace.sitemaps_table WHERE site_name = ? AND site_url = ?";
+    CassStatement* statement = cass_statement_new(query.c_str(), 2);
+
+    cass_statement_bind_string(statement, 0, siteName.c_str());
+    cass_statement_bind_string(statement, 1, siteUrl.c_str());
+
+    CassFuture* result_future = cass_session_execute(session, statement);
+
+    if (cass_future_error_code(result_future) != CASS_OK) {
+        std::cout << "Error executing Fetch query" << std::endl;
+    } else {
+        std::cout << "Fetch Query executed successfully" << std::endl;
+    }
+
+    const CassResult* result = cass_future_get_result(result_future);
+    const CassRow* row = cass_result_first_row(result);
+
+    // CassValue* value = cass_row_get_column_by_name(row, "sitemap_urls");
+    const CassValue* value = cass_row_get_column(row, 0);
+    CassIterator* iterator = cass_iterator_from_collection(value);
+
+    std::ofstream file("sitemapDB.xml");
+    file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+    file << "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
+
+    while (cass_iterator_next(iterator)) {
+        const char* sitemapUrl;
+        size_t sitemapUrlLength;
+        cass_value_get_string(cass_iterator_get_value(iterator), &sitemapUrl, &sitemapUrlLength);
+        file << "  <url>\n";
+        file << "    <loc>" << sitemapUrl << "</loc>\n";
+        file << "  </url>\n";
+    }
+
+    file << "</urlset>\n";
+
+    cass_iterator_free(iterator);
+    cass_statement_free(statement);
+    cass_result_free(result);
 }
 
 };
