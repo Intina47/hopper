@@ -18,13 +18,23 @@ public:
                 std::cout << "Error connecting to cassandra" << std::endl;
             } else {
                 std::cout << "Connected to cassandra" << std::endl;
+                std::cout << "\n---------------------------------------->\n" << std::endl;
                 createTables(session);
             }
   }
   void close(){
-            cass_future_free(connect_future);
-            cass_session_free(session);
+            // close cassandra connection
+            std::cout << "\n---------------------------------------->\n" << std::endl;
+            std::cout << "Closing cassandra connection" << std::endl;
+            close_future = cass_session_close(session);
+            cass_future_wait(close_future);
+            cass_future_free(close_future);
+
             cass_cluster_free(cluster);
+            cass_session_free(session);
+
+            std::cout << "Cassandra connection closed" << std::endl;
+
   }
       void createTables(CassSession* session) {
         // Create keyspace if not exists
@@ -55,6 +65,8 @@ private:
     CassCluster *cluster;
     CassSession *session;
     CassFuture *connect_future;
+    CassFuture *close_future;
+
 
         void executeCqlQuery(CassSession* session, const std::string& query) {
         CassStatement* statement = cass_statement_new(query.c_str(), 0);
