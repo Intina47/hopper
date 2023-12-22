@@ -1,3 +1,12 @@
+// #define _CRTDBG_MAP_ALLOC
+// #include <stdlib.h>
+// #ifdef _MSC_VER
+// #include <crtdbg.h>
+// #else
+// #define _ASSERT(expr) ((void)0)
+
+// #define _ASSERTE(expr) ((void)0)
+// #endif
 #include "SitemapGenerator.h"
 #include <vector>
 
@@ -11,5 +20,7 @@ int main() {
     }
     SitemapGenerator generator(urls, filename);
     generator.generate();
+    // _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG); 
+    // _CrtDumpMemoryLeaks();
     return 0;
 }
