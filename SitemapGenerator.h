@@ -8,13 +8,17 @@
 #include <queue>
 #include <thread>
 #include <mutex>
-#include <cassandra.h>
+#include <condition_variable> 
 #include "db.h"
 
 class SitemapGenerator {
 public:
     SitemapGenerator(const std::vector<std::string>& urls, const std::string& filename)
         : urls(urls), filename(filename) {
+            // log all the urls to be processed in the console
+            for(const auto& url : urls) {
+                std::cout << "\n------URLS--------\n" << url << std::endl;
+            }
             // connect to cassandra
             db.connect();
             session = db.getSession();
@@ -35,12 +39,18 @@ public:
 
         // thread-safe access to urlQueue
         std::mutex urlQueueMutex;
+        std::condition_variable urlQueueCondition;
+        bool stopThreads = false;
         for(int i=0; i<numThreads; ++i){
-            threads.emplace_back([this, &urlQueue, &urlQueueMutex](){
+            threads.emplace_back([this, &urlQueue, &urlQueueMutex, &urlQueueCondition, &stopThreads ](){
                 while(true){
                     std::string currentUrl;
                     {
-                        std::lock_guard<std::mutex> lock(urlQueueMutex);
+                        std::unique_lock<std::mutex> lock(urlQueueMutex);
+                        urlQueueCondition.wait(lock, [&]{ 
+                            std::cout << "Queue size: " << urlQueue.size() << std::endl;
+                            return !urlQueue.empty() || stopThreads; 
+                            });
                         if(urlQueue.empty()){
                             std::cout << "Queue is empty" << std::endl;
                             break;
@@ -48,11 +58,12 @@ public:
                         currentUrl = urlQueue.front();
                         urlQueue.pop();
                     }
-                    std::cout << "Generating sitemap for " << currentUrl << std::endl;
                     generateSitemap(currentUrl);
                 }
             });
         }
+        // notify threads that queue is empty
+        urlQueueCondition.notify_all();
         // wait for threads to finish
         for(auto& thread : threads){
             thread.join();
