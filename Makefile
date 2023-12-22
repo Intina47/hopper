@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -pedantic -I/usr/local/include
+CXXFLAGS = -std=c++17 -fsanitize=address -Wall -Wextra -pedantic -I/usr/local/include
 LIBS = -lcurl -lgumbo -lcassandra
 SOURCES = $(wildcard *.cpp)
 HEADERS = $(wildcard *.h)
