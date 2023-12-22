@@ -15,6 +15,9 @@ class SitemapGenerator {
 public:
     SitemapGenerator(const std::vector<std::string>& urls, const std::string& filename)
         : urls(urls), filename(filename) {
+            for(const auto& url : urls) {
+                std::cout << "URLS: " << url << std::endl;
+            }
             // connect to cassandra
             db.connect();
             session = db.getSession();
@@ -30,7 +33,7 @@ public:
             urlQueue.push(url);
         }
 
-        const int numThreads = 2;
+        const int numThreads = 10;
         std::vector<std::thread> threads;
 
         // thread-safe access to urlQueue

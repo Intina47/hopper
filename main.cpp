@@ -1,17 +1,22 @@
-// #define _CRTDBG_MAP_ALLOC
-// #include <stdlib.h>
-// #ifdef _MSC_VER
-// #include <crtdbg.h>
-// #else
-// #define _ASSERT(expr) ((void)0)
-
-// #define _ASSERTE(expr) ((void)0)
-// #endif
 #include "SitemapGenerator.h"
 #include <vector>
+#include <iostream>
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 int main() {
-    std::vector<std::string> urls = {"https://www.fatface.com", "https://www.boohoo.com/", "https://www.asos.com/", "https://www.missguided.co.uk/", "https://www.prettylittlething.com/", "https://www.newlook.com/uk", "https://www.topshop.com/", "https://www.riverisland.com/", "https://www.next.co.uk/", "https://www.marksandspencer.com/", "https://www.zara.com/uk/", "https://www.hm.com/gb", "https://www.johnlewis.com/", "https://www.debenhams.com/", "https://www.houseoffraser.co.uk/", "https://www.selfridges.com/GB/en/", "https://www.harveynichols.com/", "https://www.tkmaxx.com/uk/en/", "https://www.very.co.uk/", "https://www.littlewoods.com/", "https://www.very.co.uk/", "https://www.littlewoods.com/", "https://www.very.co.uk/", "https://www.littlewoods.com/", "https://www.very.co.uk/", "https://www.littlewoods.com/", "https://www.very.co.uk/", "https://www.very.co.uk/"};
+    std::ifstream jsonFile("urls.json");
+    
+    if (!jsonFile.is_open()) {
+        std::cerr << "Error opening JSON file" << std::endl;
+        return 1;
+    }
+
+    nlohmann::json jsonUrls;
+    jsonFile >> jsonUrls;
+
+    std::vector<std::string> urls = jsonUrls;
+
     std::string filename;
     for(auto& url : urls) {
         std::string filename = url.substr(url.find("www.")+4);
@@ -20,7 +25,5 @@ int main() {
     }
     SitemapGenerator generator(urls, filename);
     generator.generate();
-    // _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG); 
-    // _CrtDumpMemoryLeaks();
     return 0;
 }
