@@ -1,7 +1,7 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -pedantic -I/usr/local/include
 LIBS = -lcurl -lgumbo -lcassandra
-SOURCES = sitemap.cpp
+SOURCES = main.cpp
 EXECUTABLE = sitemap
 
 all: $(EXECUTABLE)
