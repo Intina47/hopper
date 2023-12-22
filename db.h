@@ -8,7 +8,7 @@
 class DB {
 public:
   void connect(){
-                // connect to cassandra
+            // connect to cassandra
             std::cout << "Connecting to cassandra" << std::endl;
             cluster = cass_cluster_new();
             session = cass_session_new();
