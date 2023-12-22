@@ -8,13 +8,16 @@
 #include <fstream>
 #include <curl/curl.h>
 #include <gumbo.h>
+#include <queue>
+#include <thread>
+#include <mutex>
 #include <cassandra.h>
 #include "db.h"
 
 class SitemapGenerator {
 public:
-    SitemapGenerator(const std::string& url, const std::string& filename)
-        : url(url), filename(filename) {
+    SitemapGenerator(const std::vector<std::string>& urls, const std::string& filename)
+        : urls(urls), filename(filename) {
             // connect to cassandra
             db.connect();
             session = db.getSession();
@@ -25,15 +28,44 @@ public:
     }
 
     void generate() {
-        std::cout << "Generating sitemap for " << url << std::endl;
-        generateSitemap();
-        std::cout << "Generating sitemap from DB" << std::endl;
-        getSitemapFromCassandra(session, siteName, url);
-        std::cout << "Sitemap generated successfully From DB" << std::endl;
+        std::queue<std::string> urlQueue;
+        for(const auto& url : urls) {
+            urlQueue.push(url);
+        }
+
+        const int numThreads = 4;
+        std::vector<std::thread> threads;
+
+        // mutext for thread-safe access to urlQueue
+        std::mutex urlQueueMutex;
+        for(int i=0; i<numThreads; ++i){
+            threads.emplace_back([this, &urlQueue, &urlQueueMutex](){
+                while(true){
+                    std::string currentUrl;
+                    {
+                        std::lock_guard<std::mutex> lock(urlQueueMutex);
+                        if(urlQueue.empty()){
+                            std::cout << "Queue is empty" << std::endl;
+                            break;
+                        }
+                        currentUrl = urlQueue.front();
+                        urlQueue.pop();
+                    }
+                    std::cout << "Generating sitemap for " << currentUrl << std::endl;
+                    generateSitemap(currentUrl);
+                }
+            });
+        }
+        // wait for threads to finish
+        for(auto& thread : threads){
+            thread.join();
+        }
+        std::cout << "All threads finished" << std::endl;
     }
 
 private:
-    std::string url;
+    // std::string url;
+    std::vector<std::string> urls;
     std::string filename;
     CassSession* session;
     std::string siteName;
@@ -50,7 +82,7 @@ private:
         return newLength;
     }
 
-    std::string fetchWebpage() {
+    std::string fetchWebpage(const std::string& url) {
         CURL* curl;
         CURLcode res;
         std::string readBuffer;
@@ -95,13 +127,20 @@ private:
         if (std::regex_search(siteUrl, match, regex)) {
             if (match.size() > 1) {
                 return match[1].str();
+            } else {
+                std::string filename = siteUrl.substr(siteUrl.find("www.")+4);
+                filename = filename.substr(0, filename.find("."));
+                return filename;
             }
         }
         return "unknown";
     }
     
-    void generateSitemap() {
-        std::string webpage = fetchWebpage();
+    void generateSitemap(const std::string& url) {
+        std::cout << "Generating sitemap for " << url << std::endl;
+        siteName = extractSiteName(url);
+
+        std::string webpage = fetchWebpage(url);
         GumboOutput* output = gumbo_parse(webpage.c_str());
         std::vector<std::string> links;
         extractLinks(output->root, links);
@@ -117,7 +156,6 @@ private:
         }
         file << "</urlset>\n";
 
-        siteName = extractSiteName(url);
         saveSitemapToCassandra(session, siteName, url, links);
 
     }
