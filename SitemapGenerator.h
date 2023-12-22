@@ -15,10 +15,6 @@ class SitemapGenerator {
 public:
     SitemapGenerator(const std::vector<std::string>& urls, const std::string& filename)
         : urls(urls), filename(filename) {
-            // log all the urls to be processed in the console
-            for(const auto& url : urls) {
-                std::cout << "\n------URLS--------\n" << url << std::endl;
-            }
             // connect to cassandra
             db.connect();
             session = db.getSession();
@@ -34,7 +30,7 @@ public:
             urlQueue.push(url);
         }
 
-        const int numThreads = 4;
+        const int numThreads = 2;
         std::vector<std::thread> threads;
 
         // thread-safe access to urlQueue
@@ -66,6 +62,7 @@ public:
         urlQueueCondition.notify_all();
         // wait for threads to finish
         for(auto& thread : threads){
+            std::cout << "Waiting for " << threads.size() << " threads to finish" << std::endl;
             thread.join();
         }
         std::cout << "All threads finished" << std::endl;
