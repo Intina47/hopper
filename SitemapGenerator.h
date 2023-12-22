@@ -124,16 +124,22 @@ private:
         // Extract site name from the site URL (modify as needed)
         std::regex regex("https://www\\.(\\w+)\\.com");
         std::smatch match;
+        std::string returnStatement;
         if (std::regex_search(siteUrl, match, regex)) {
             if (match.size() > 1) {
                 return match[1].str();
             } else {
-                std::string filename = siteUrl.substr(siteUrl.find("www.")+4);
-                filename = filename.substr(0, filename.find("."));
-                return filename;
+                returnStatement = "unknown";
             }
         }
-        return "unknown";
+        if (returnStatement == "unknown")
+        {
+         std::string filename = siteUrl.substr(siteUrl.find("www.")+4);
+         filename = filename.substr(0, filename.find("."));
+         return filename;
+        }
+        
+        return "Noname";
     }
     
     void generateSitemap(const std::string& url) {
@@ -161,7 +167,70 @@ private:
     }
 
     void saveSitemapToCassandra(CassSession* session, const std::string& siteName, const std::string& siteUrl, const std::vector<std::string>& sitemapUrls) {
-    // Create and execute a query to insert data
+
+    std::string query = "SELECT site_name, site_url, sitemap_urls FROM sitemaps_keyspace.sitemaps_table WHERE site_name = ? AND site_url = ?";
+    CassStatement* statement = cass_statement_new(query.c_str(), 2);
+
+    cass_statement_bind_string(statement, 0, siteName.c_str());
+    cass_statement_bind_string(statement, 1, siteUrl.c_str());
+
+    CassFuture* result_future = cass_session_execute(session, statement);
+
+    if (cass_future_error_code(result_future) != CASS_OK) {
+        std::cout << "Error executing Fetch query" << std::endl;
+    } else {
+        std::cout << "Fetch Query executed successfully" << std::endl;
+    }
+
+    const CassResult* result = cass_future_get_result(result_future);
+    const CassRow* row = cass_result_first_row(result);
+
+    if (row == NULL) {
+        std::cout << "Site doesn't exist in the database" << std::endl;
+        insertSitemapToCassandra(session, siteName, siteUrl, sitemapUrls);
+    } else {
+        std::cout << "Site exists in the database" << std::endl;
+        // CassValue* value = cass_row_get_column_by_name(row, "sitemap_urls");
+        const CassValue* value = cass_row_get_column(row, 2);
+        CassIterator* iterator = cass_iterator_from_collection(value);
+
+        std::vector<std::string> existingSitemapUrls;
+        while (cass_iterator_next(iterator)) {
+            const char* sitemapUrl;
+            size_t sitemapUrlLength;
+            cass_value_get_string(cass_iterator_get_value(iterator), &sitemapUrl, &sitemapUrlLength);
+            existingSitemapUrls.push_back(sitemapUrl);
+        }
+
+        cass_iterator_free(iterator);
+
+        if (existingSitemapUrls.empty()) {
+            std::cout << "Sitemap urls column is empty" << std::endl;
+            insertSitemapToCassandra(session, siteName, siteUrl, sitemapUrls);
+        } else {
+            std::cout << "Sitemap urls column is not empty" << std::endl;
+            std::vector<std::string> newSitemapUrls;
+            for (const std::string& sitemapUrl : sitemapUrls) {
+                if (std::find(existingSitemapUrls.begin(), existingSitemapUrls.end(), sitemapUrl) == existingSitemapUrls.end()) {
+                    newSitemapUrls.push_back(sitemapUrl);
+                }
+            }
+
+            if (newSitemapUrls.empty()) {
+                std::cout << "No new sitemap urls to insert" << std::endl;
+            } else {
+                std::cout << "New sitemap urls to insert" << std::endl;
+                insertSitemapToCassandra(session, siteName, siteUrl, newSitemapUrls);
+            }
+        }
+    }
+
+    cass_statement_free(statement);
+    cass_result_free(result);
+}
+
+ void insertSitemapToCassandra(CassSession* session, const std::string& siteName, const std::string& siteUrl, const std::vector<std::string>& sitemapUrls) {
+            // Create and execute a query to insert data
     std::string query = "INSERT INTO sitemaps_keyspace.sitemaps_table (site_name, site_url, sitemap_urls) VALUES (?, ?, ?)";
     CassStatement* statement = cass_statement_new(query.c_str(), 3);
 
@@ -188,7 +257,8 @@ private:
 
     cass_collection_free(sitemapCollection);
     cass_statement_free(statement);
-}
+    }
+
 
 // get data from cassandra and save it to an xml file
 void getSitemapFromCassandra(CassSession* session, const std::string& siteName, const std::string& siteUrl) {
