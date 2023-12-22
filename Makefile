@@ -1,12 +1,13 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -pedantic -I/usr/local/include
 LIBS = -lcurl -lgumbo -lcassandra
-SOURCES = main.cpp
+SOURCES = $(wildcard *.cpp)
+HEADERS = $(wildcard *.h)
 EXECUTABLE = sitemap
 
 all: $(EXECUTABLE)
 
-$(EXECUTABLE): $(SOURCES)
+$(EXECUTABLE): $(SOURCES) $(HEADERS)
 	$(CXX) $(CXXFLAGS) $(SOURCES) -o $(EXECUTABLE) $(LIBS)
 
 clean:
