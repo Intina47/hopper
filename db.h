@@ -1,6 +1,3 @@
-// #ifdef DB_H
-// #define DB_H
-
 #include <stdio.h>
 #include <iostream>
 #include <cassandra.h>
@@ -72,4 +69,3 @@ private:
         cass_statement_free(statement);
     }
 };
-// #endif //

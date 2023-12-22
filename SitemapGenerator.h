@@ -1,6 +1,3 @@
-// #ifdef SITEMAPGENERATOR_H
-// #define SITEMAPGENERATOR_H
-
 #include <iostream>
 #include <regex>
 #include <vector>
@@ -36,7 +33,7 @@ public:
         const int numThreads = 4;
         std::vector<std::thread> threads;
 
-        // mutext for thread-safe access to urlQueue
+        // thread-safe access to urlQueue
         std::mutex urlQueueMutex;
         for(int i=0; i<numThreads; ++i){
             threads.emplace_back([this, &urlQueue, &urlQueueMutex](){
@@ -64,7 +61,6 @@ public:
     }
 
 private:
-    // std::string url;
     std::vector<std::string> urls;
     std::string filename;
     CassSession* session;
@@ -119,9 +115,8 @@ private:
             extractLinks(static_cast<GumboNode*>(children->data[i]), links);
         }
     }
-
+// Extract site name from the site URL
     std::string extractSiteName(const std::string& siteUrl) {
-        // Extract site name from the site URL (modify as needed)
         std::regex regex("https://www\\.(\\w+)\\.com");
         std::smatch match;
         std::string returnStatement;
@@ -190,7 +185,6 @@ private:
         insertSitemapToCassandra(session, siteName, siteUrl, sitemapUrls);
     } else {
         std::cout << "Site exists in the database" << std::endl;
-        // CassValue* value = cass_row_get_column_by_name(row, "sitemap_urls");
         const CassValue* value = cass_row_get_column(row, 2);
         CassIterator* iterator = cass_iterator_from_collection(value);
 
@@ -230,7 +224,7 @@ private:
 }
 
  void insertSitemapToCassandra(CassSession* session, const std::string& siteName, const std::string& siteUrl, const std::vector<std::string>& sitemapUrls) {
-            // Create and execute a query to insert data
+    // Create and execute a query to insert data
     std::string query = "INSERT INTO sitemaps_keyspace.sitemaps_table (site_name, site_url, sitemap_urls) VALUES (?, ?, ?)";
     CassStatement* statement = cass_statement_new(query.c_str(), 3);
 
@@ -245,8 +239,6 @@ private:
     cass_statement_bind_collection(statement, 2, sitemapCollection);
 
     CassFuture* result_future = cass_session_execute(session, statement);
-    // log error into a variable
-
     CassError rc = cass_future_error_code(result_future);
 
     if (cass_future_error_code(result_future) != CASS_OK) {
@@ -279,7 +271,6 @@ void getSitemapFromCassandra(CassSession* session, const std::string& siteName, 
     const CassResult* result = cass_future_get_result(result_future);
     const CassRow* row = cass_result_first_row(result);
 
-    // CassValue* value = cass_row_get_column_by_name(row, "sitemap_urls");
     const CassValue* value = cass_row_get_column(row, 0);
     CassIterator* iterator = cass_iterator_from_collection(value);
 
@@ -304,5 +295,3 @@ void getSitemapFromCassandra(CassSession* session, const std::string& siteName, 
 }
 
 };
-
-// #endif // SITEMAPGENERATOR_H
