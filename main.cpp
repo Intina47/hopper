@@ -17,12 +17,12 @@ int main() {
 
     std::vector<std::string> urls = jsonUrls;
 
-    std::string filename;
-    for(auto& url : urls) {
-        std::string filename = url.substr(url.find("www.")+4);
-        filename = filename.substr(0, filename.find("."));
-        filename += ".xml";
-    }
+    std::string filename = "sitemap.xml";
+    // for(auto& url : urls) {
+    //     std::string filename = url.substr(url.find("www.")+4);
+    //     filename = filename.substr(0, filename.find("."));
+    //     filename += ".xml";
+    // }
     SitemapGenerator generator(urls, filename);
     generator.generate();
     return 0;
