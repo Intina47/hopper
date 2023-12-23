@@ -33,7 +33,7 @@ public:
             urlQueue.push(url);
         }
 
-        const int numThreads = 100;
+        const int numThreads = 1;
         std::vector<std::thread> threads;
 
         // thread-safe access to urlQueue
@@ -93,13 +93,44 @@ private:
         CURL* curl;
         CURLcode res;
         std::string readBuffer;
+        struct curl_slist *headers = NULL;
 
         curl_global_init(CURL_GLOBAL_DEFAULT);
         curl = curl_easy_init();
         if(curl) {
+            // Randomize User-Agent
+            std::vector<std::string> user_agents = {
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15",
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15"
+            };
+            std::string user_agent = user_agents[rand() % user_agents.size()];
+            // delay between requests
+            std::this_thread::sleep_for(std::chrono::seconds(rand() % 5 + 1));
+
+            headers = curl_slist_append(headers, "Accept: text/html");
+            headers = curl_slist_append(headers, "Content-Type: text/html; charset=UTF-8");
+            headers = curl_slist_append(headers, "charsets: utf-8");
+            headers = curl_slist_append(headers, "Accept-Encoding: gzip, deflate, br");
+            headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.9");
+            headers = curl_slist_append(headers, "Connection: keep-alive");
+            headers = curl_slist_append(headers, "Upgrade-Insecure-Requests: 1");
+            headers = curl_slist_append(headers, "Cache-Control: max-age=0");
+            headers = curl_slist_append(headers, "TE: Trailers");
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+            curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            // handle cookies
+            curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "cookies.txt");
+            curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "cookies.txt");
             res = curl_easy_perform(curl);
             if(res != CURLE_OK) {
                 std::cout << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
@@ -130,22 +161,12 @@ private:
     std::string extractSiteName(const std::string& siteUrl) {
         std::regex regex("https://www\\.(\\w+)\\.com");
         std::smatch match;
-        std::string returnStatement;
         if (std::regex_search(siteUrl, match, regex)) {
             if (match.size() > 1) {
                 return match[1].str();
-            } else {
-                returnStatement = "unknown";
             }
         }
-        if (returnStatement == "unknown")
-        {
-         std::string filename = siteUrl.substr(siteUrl.find("www.")+4);
-         filename = filename.substr(0, filename.find("."));
-         return filename;
-        }
-        
-        return "Noname";
+        return "unknown";
     }
     
     void generateSitemap(const std::string& url) {
@@ -157,7 +178,7 @@ private:
         std::vector<std::string> links;
         extractLinks(output->root, links);
         gumbo_destroy_output(&kGumboDefaultOptions, output);
-
+        std::cout << "Found " << links.size() << " links" << std::endl;
         std::ofstream file(filename);
         file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
         file << "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
