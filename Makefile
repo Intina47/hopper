@@ -1,14 +1,17 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -fsanitize=address -Wall -Wextra -pedantic -I/usr/local/include
 LIBS = -lcurl -lgumbo -lcassandra
-SOURCES = $(wildcard *.cpp)
 HEADERS = $(wildcard *.h)
 EXECUTABLE = sitemap
+SCRAPPER_EXECUTABLE = scrapper
 
-all: $(EXECUTABLE)
+all: $(EXECUTABLE) $(SCRAPPER_EXECUTABLE)
 
-$(EXECUTABLE): $(SOURCES) $(HEADERS)
-	$(CXX) $(CXXFLAGS) $(SOURCES) -o $(EXECUTABLE) $(LIBS)
 
+$(EXECUTABLE): main.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) main.cpp -o $(EXECUTABLE) $(LIBS)
+
+$(SCRAPPER_EXECUTABLE): scrapper.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) scrapper.cpp -o $(SCRAPPER_EXECUTABLE) $(LIBS)
 clean:
-	rm -f $(EXECUTABLE)
+	rm -f $(EXECUTABLE) $(SCRAPPER_EXECUTABLE)
