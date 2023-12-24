@@ -8,13 +8,10 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
-#include <cctype>
-#include <cstdlib>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <nlohmann/json.hpp>
-#include <gumbo.h>
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 #include "db.h"
@@ -26,14 +23,12 @@ using json = nlohmann::json;
 class Scrapper {
     private:
         // cassandra variables
-        GumboOutput* output;
-        json j;
         mutex mtx;
         condition_variable cv;
         CassSession* session;
         std::ifstream jsonFile;
         json jsonUrls;
-        std::vector<std::string> urls;
+        std::vector<std::string> siteUrls;
         DB db;
         WebPageFetcher wpf;
         std::string webpage;
@@ -46,11 +41,30 @@ class Scrapper {
                 return;
             }
             jsonFile >> jsonUrls;
-            urls = jsonUrls;
+            siteUrls = jsonUrls;
         }
 
-        void process_url(std::string url){
-            webpage = wpf.fetch(url);
+        void process_url(std::string siteUrl){
+            get_sitemap_for_url(siteUrl);
+            fetch_and_signal_python_scripts();
+        }
+
+        void get_sitemap_for_url(std::string siteUrl) {
+            std::vector<std::string> sitemapData;
+            sitemapData = db.getSitemapFromCassandra(session, siteUrl);
+            if (!sitemapData.empty()) {
+            sitemap = sitemapData;
+            }
+        }
+
+        void fetch_and_signal_python_scripts() {
+            for (auto siteMapUrl : sitemap) {
+                fetch_and_signal_python_script(siteMapUrl);
+            }
+        }
+
+        void fetch_and_signal_python_script(std::string siteMapUrl) {
+            webpage = wpf.fetch(siteMapUrl);
             try{
                 //shared memory object
                 boost::interprocess::shared_memory_object shm(
@@ -81,17 +95,20 @@ class Scrapper {
     public:
         Scrapper() {
             get_urls_from_json();
+            db.connect();
+            session = db.getSession();
         }
 
         ~Scrapper() {
-            gumbo_destroy_output(&kGumboDefaultOptions, output);
             jsonFile.close();
+            db.close();
         }
 
         void run(){
+            std::cout << "Scrapper running..." << std::endl;
             std::vector<std::thread> threads;
-            for (const auto& url : urls) {
-                threads.push_back(std::thread(&Scrapper::process_url, this, url));
+            for (const auto& siteurl : siteUrls) {
+                threads.push_back(std::thread(&Scrapper::process_url, this, siteurl));
             }
             for (auto& thread : threads) {
                 thread.join();
@@ -101,18 +118,16 @@ class Scrapper {
         // get site map from cassandra
         void get_sitemap(){
             session = db.getSession();
-            db.connect();
-            for (auto url : urls) {
+            for (auto url : siteUrls) {
                 sitemap = db.getSitemapFromCassandra(session, url);
             }
-            db.close();
         }
 
         // signal python script to start processing the data using a named pipe
         void signal_python_script() {
             std::ofstream pipe;
             pipe.open("pipe", std::ios::out);
-            pipe << "start";
+            pipe << "1";
             pipe.close();
         }
 };
