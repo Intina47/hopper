@@ -56,23 +56,30 @@ public:
     // get data from cassandra and save it to an xml file
 std::vector<std::string> getSitemapFromCassandra(CassSession* session, const std::string& siteUrl) {
     // get the sitemap for the given site url
-    std::string query = "SELECT sitemap_urls FROM sitemaps_keyspace.sitemaps_table WHERE site_url = ?";
+    std::string query = "SELECT sitemap_urls FROM sitemaps_keyspace.sitemaps_table WHERE site_url = ? ALLOW FILTERING";
     CassStatement* statement = cass_statement_new(query.c_str(), 1);
     cass_statement_bind_string(statement, 0, siteUrl.c_str());
 
     CassFuture* result_future = cass_session_execute(session, statement);
 
     if (cass_future_error_code(result_future) != CASS_OK) {
-        std::cout << "Error executing Fetch query" << std::endl;
+        const char* err_message;
+        size_t err_message_length;
+        cass_future_error_message(result_future, &err_message, &err_message_length);
+        std::cerr << "Error executing Fetch query: " << err_message << std::endl;
+        cass_statement_free(statement);
+        cass_future_free(result_future);
+        return {};
     } else {
-        std::cerr << "Error executing Fetch query: " << cass_error_desc(cass_future_error_code(result_future)) << std::endl;
+        std::cerr << "Error executing Fetch query: " << std::endl;
     }
 
     const CassResult* result = cass_future_get_result(result_future);
     if(!result) {
-        std::cout << "Error getting result from future: " << std::endl;
+        std::cout << "Error getting result from future: " << cass_error_desc(cass_future_error_code(result_future)) << std::endl;
         cass_statement_free(statement);
         cass_result_free(result);
+        cass_future_free(result_future);
         return {};
     }
     CassIterator* iterator = cass_iterator_from_result(result);
@@ -88,6 +95,7 @@ std::vector<std::string> getSitemapFromCassandra(CassSession* session, const std
     cass_iterator_free(iterator);
     cass_statement_free(statement);
     cass_result_free(result);
+    cass_future_free(result_future);
 
     return sitemapUrls;
 }
