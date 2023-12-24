@@ -52,7 +52,38 @@ public:
                                        ")";
         executeCqlQuery(session, createTableQuery);
     }
+    // get data from cassandra and save it to an xml file
+std::vector<std::string> getSitemapFromCassandra(CassSession* session, const std::string& siteUrl) {
+    // get the sitemap for the given site url
+    std::string query = "SELECT sitemap_urls FROM sitemaps_keyspace.sitemaps_table WHERE site_url = ?";
+    CassStatement* statement = cass_statement_new(query.c_str(), 1);
+    cass_statement_bind_string(statement, 0, siteUrl.c_str());
 
+    CassFuture* result_future = cass_session_execute(session, statement);
+
+    if (cass_future_error_code(result_future) != CASS_OK) {
+        std::cout << "Error executing Fetch query" << std::endl;
+    } else {
+        std::cout << "Fetch Query executed successfully" << std::endl;
+    }
+
+    CassResult* result = cass_future_get_result(result_future);
+    CassIterator* iterator = cass_iterator_from_result(result);
+
+    std::vector<std::string> sitemapUrls;
+    while (cass_iterator_next(iterator)) {
+        const char* sitemapUrl;
+        size_t sitemapUrlLength;
+        cass_value_get_string(cass_iterator_get_value(iterator), &sitemapUrl, &sitemapUrlLength);
+        sitemapUrls.push_back(sitemapUrl);
+    }
+
+    cass_iterator_free(iterator);
+    cass_statement_free(statement);
+    cass_result_free(result);
+
+    return sitemapUrls;
+}
     void setSession(CassSession* session) {
         this->session = session;
     }
