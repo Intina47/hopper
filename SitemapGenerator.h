@@ -10,6 +10,7 @@
 #include <mutex>
 #include <condition_variable> 
 #include "db.h"
+#include "WebPageFetcher.h"
 
 class SitemapGenerator {
 public:
@@ -77,71 +78,7 @@ private:
     CassSession* session;
     std::string siteName;
     DB db;
-
-    static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* s) {
-        size_t newLength = size*nmemb;
-        try {
-            s->append((char*)contents, newLength);
-        } catch(std::bad_alloc &e) {
-            std::cout << "Not enough memory" << std::endl;
-            return 0;
-        }
-        return newLength;
-    }
-
-    std::string fetchWebpage(const std::string& url) {
-        CURL* curl;
-        CURLcode res;
-        std::string readBuffer;
-        struct curl_slist *headers = NULL;
-
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-        curl = curl_easy_init();
-        if(curl) {
-            // Randomize User-Agent
-            std::vector<std::string> user_agents = {
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15",
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15"
-            };
-            std::string user_agent = user_agents[rand() % user_agents.size()];
-            // delay between requests
-            std::this_thread::sleep_for(std::chrono::seconds(rand() % 5 + 1));
-
-            headers = curl_slist_append(headers, "Accept: text/html");
-            headers = curl_slist_append(headers, "Content-Type: text/html; charset=UTF-8");
-            headers = curl_slist_append(headers, "charsets: utf-8");
-            headers = curl_slist_append(headers, "Accept-Encoding: gzip, deflate, br");
-            headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.9");
-            headers = curl_slist_append(headers, "Connection: keep-alive");
-            headers = curl_slist_append(headers, "Upgrade-Insecure-Requests: 1");
-            headers = curl_slist_append(headers, "Cache-Control: max-age=0");
-            headers = curl_slist_append(headers, "TE: Trailers");
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-            curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
-            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-            // handle cookies
-            curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "cookies.txt");
-            curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "cookies.txt");
-            res = curl_easy_perform(curl);
-            if(res != CURLE_OK) {
-                std::cout << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
-            } else {
-                std::cout << "Webpage fetched successfully" << std::endl;
-            }
-            curl_easy_cleanup(curl);
-        }
-        curl_global_cleanup();
-        return readBuffer;
-    }
+    WebPageFetcher webPageFetcher;
 
     void extractLinks(GumboNode* node, std::vector<std::string>& links) {
         if (node->type != GUMBO_NODE_ELEMENT) {
@@ -173,7 +110,7 @@ private:
         std::cout << "Generating sitemap for " << url << std::endl;
         siteName = extractSiteName(url);
 
-        std::string webpage = fetchWebpage(url);
+        std::string webpage = webPageFetcher.fetch(url);
         GumboOutput* output = gumbo_parse(webpage.c_str());
         std::vector<std::string> links;
         extractLinks(output->root, links);
@@ -285,48 +222,5 @@ private:
     cass_collection_free(sitemapCollection);
     cass_statement_free(statement);
     }
-
-
-// get data from cassandra and save it to an xml file
-void getSitemapFromCassandra(CassSession* session, const std::string& siteName, const std::string& siteUrl) {
-    std::string query = "SELECT sitemap_urls FROM sitemaps_keyspace.sitemaps_table WHERE site_name = ? AND site_url = ?";
-    CassStatement* statement = cass_statement_new(query.c_str(), 2);
-
-    cass_statement_bind_string(statement, 0, siteName.c_str());
-    cass_statement_bind_string(statement, 1, siteUrl.c_str());
-
-    CassFuture* result_future = cass_session_execute(session, statement);
-
-    if (cass_future_error_code(result_future) != CASS_OK) {
-        std::cout << "Error executing Fetch query" << std::endl;
-    } else {
-        std::cout << "Fetch Query executed successfully" << std::endl;
-    }
-
-    const CassResult* result = cass_future_get_result(result_future);
-    const CassRow* row = cass_result_first_row(result);
-
-    const CassValue* value = cass_row_get_column(row, 0);
-    CassIterator* iterator = cass_iterator_from_collection(value);
-
-    std::ofstream file("sitemapDB.xml");
-    file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-    file << "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
-
-    while (cass_iterator_next(iterator)) {
-        const char* sitemapUrl;
-        size_t sitemapUrlLength;
-        cass_value_get_string(cass_iterator_get_value(iterator), &sitemapUrl, &sitemapUrlLength);
-        file << "  <url>\n";
-        file << "    <loc>" << sitemapUrl << "</loc>\n";
-        file << "  </url>\n";
-    }
-
-    file << "</urlset>\n";
-
-    cass_iterator_free(iterator);
-    cass_statement_free(statement);
-    cass_result_free(result);
-}
 
 };
