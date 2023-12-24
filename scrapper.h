@@ -49,37 +49,10 @@ class Scrapper {
             urls = jsonUrls;
         }
 
-    public:
-        Scrapper() {
-            get_urls_from_json();
-        }
-
-        ~Scrapper() {
-            gumbo_destroy_output(&kGumboDefaultOptions, output);
-            jsonFile.close();
-        }
-
-        void run(){
-            get_sitemap();
-            get_webpage();
-            signal_python_script();
-        }
-
-        // get site map from cassandra
-        void get_sitemap(){
-            session = db.getSession();
-            db.connect();
-            for (auto url : urls) {
-                sitemap = db.getSitemapFromCassandra(session, url);
-            }
-            db.close();
-        }
-
-        void get_webpage(){
-            for (auto url : urls) {
-                webpage = wpf.fetch(url);
-
-                // shared memory object
+        void process_url(std::string url){
+            webpage = wpf.fetch(url);
+            try{
+                //shared memory object
                 boost::interprocess::shared_memory_object shm(
                     boost::interprocess::open_or_create,
                     "webpage",
@@ -98,13 +71,41 @@ class Scrapper {
                 // copy data to shared memory
                 std::memcpy(region.get_address(), webpage.c_str(), webpage.size() + 1);
 
-                // remove shared memory
-                boost::interprocess::shared_memory_object::remove("webpage");
-
-                // signal python script to start processing the data using a named pipe and handle synchronization between the C++ and Python parts of your program to ensure that the Python script doesn't start reading the HTML content before the C++ program has finished writing it
+                //signal python script
                 signal_python_script();
-  
+            } catch (boost::interprocess::interprocess_exception &ex) {
+                std::cout << "BOOST::EXCEPTION: " << ex.what() << std::endl;
             }
+        }
+
+    public:
+        Scrapper() {
+            get_urls_from_json();
+        }
+
+        ~Scrapper() {
+            gumbo_destroy_output(&kGumboDefaultOptions, output);
+            jsonFile.close();
+        }
+
+        void run(){
+            std::vector<std::thread> threads;
+            for (const auto& url : urls) {
+                threads.push_back(std::thread(&Scrapper::process_url, this, url));
+            }
+            for (auto& thread : threads) {
+                thread.join();
+            }
+        }
+
+        // get site map from cassandra
+        void get_sitemap(){
+            session = db.getSession();
+            db.connect();
+            for (auto url : urls) {
+                sitemap = db.getSitemapFromCassandra(session, url);
+            }
+            db.close();
         }
 
         // signal python script to start processing the data using a named pipe
