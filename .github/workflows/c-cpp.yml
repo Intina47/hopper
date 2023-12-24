@@ -1,10 +1,10 @@
-name: C/C++ CI
+name: C++ CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
 
 jobs:
   build:
@@ -12,12 +12,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libboost-all-dev libcurl4-openssl-dev libgumbo-dev libcppunit-dev
+
+    - name: Build
+      run: make all
+
+    - name: Run tests
       run: make check
-    - name: make distcheck
-      run: make distcheck
