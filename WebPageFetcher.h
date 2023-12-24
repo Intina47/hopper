@@ -89,8 +89,10 @@ class WebPageFetcher {
                     std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
                 }
                 curl_easy_cleanup(curl);
+            } else {
+                std::cerr << "Error initializing CURL" << std::endl;
             }
-            print();
+            curl_easy_cleanup(curl);
             return read_buffer;
         }
         void print(){
