@@ -65,12 +65,12 @@ std::vector<std::string> getSitemapFromCassandra(CassSession* session, const std
     if (cass_future_error_code(result_future) != CASS_OK) {
         std::cout << "Error executing Fetch query" << std::endl;
     } else {
-        std::cout << "Fetch Query executed successfully" << std::endl;
+        std::cerr << "Error executing Fetch query: " << cass_error_desc(cass_future_error_code(result_future)) << std::endl;
     }
 
     const CassResult* result = cass_future_get_result(result_future);
     if(!result) {
-        std::cout << "Error getting result from future" << std::endl;
+        std::cout << "Error getting result from future: " << std::endl;
         cass_statement_free(statement);
         cass_result_free(result);
         return {};

@@ -9,6 +9,8 @@
 #include <fstream>
 #include <sstream>
 #include <thread>
+#include <chrono>
+#include <cstdlib>
 #include <mutex>
 #include <condition_variable>
 #include <nlohmann/json.hpp>
@@ -129,6 +131,25 @@ class Scrapper {
             pipe.open("pipe", std::ios::out);
             pipe << "1";
             pipe.close();
+
+            // Wait for the named pipe to be created
+            const std::string pipePath = "pipe";
+            const std::chrono::milliseconds waitTime(100);
+
+            while (!std::ifstream(pipePath)) {
+                std::this_thread::sleep_for(waitTime);
+            }
+
+            //run python script
+            const std::string pythonScript = "html_parser.py";
+            std::string command = "python3 " + pythonScript;
+            int status = std::system(command.c_str());
+            if (status == 0) {
+                std::cout << "Python script ran successfully" << std::endl;
+            } else {
+                std::cout << "Python script failed to run" << std::endl;
+            }
+
         }
 };
 #endif
