@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <vector>
 #include <iostream>
 #include <cassandra.h>
 
@@ -34,9 +36,8 @@ public:
             cass_session_free(session);
 
             std::cout << "Cassandra connection closed" << std::endl;
-
   }
-      void createTables(CassSession* session) {
+    void createTables(CassSession* session) {
         // Create keyspace if not exists
         std::string createKeyspaceQuery = "CREATE KEYSPACE IF NOT EXISTS sitemaps_keyspace WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}";
         executeCqlQuery(session, createKeyspaceQuery);
@@ -67,7 +68,13 @@ std::vector<std::string> getSitemapFromCassandra(CassSession* session, const std
         std::cout << "Fetch Query executed successfully" << std::endl;
     }
 
-    CassResult* result = cass_future_get_result(result_future);
+    const CassResult* result = cass_future_get_result(result_future);
+    if(!result) {
+        std::cout << "Error getting result from future" << std::endl;
+        cass_statement_free(statement);
+        cass_result_free(result);
+        return {};
+    }
     CassIterator* iterator = cass_iterator_from_result(result);
 
     std::vector<std::string> sitemapUrls;
