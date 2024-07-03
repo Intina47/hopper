@@ -21,3 +21,6 @@ if you want to view data in a table, you can run:
 ```bash
 select * from <keyspace>.<table_name>;
 ```
+
+# unprod steak
+1
