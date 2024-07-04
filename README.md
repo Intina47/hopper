@@ -23,4 +23,4 @@ select * from <keyspace>.<table_name>;
 ```
 
 # unprod steak
-1
+2
